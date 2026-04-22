@@ -62,11 +62,30 @@
 
   <div id="screen-create" class="screen active">
     <h1>The Room</h1>
-    <p class="sub">Create a session to get your join link and QR code.</p>
+    <input
+      type="text"
+      id="session-name-input"
+      placeholder="Session name (optional)"
+      autocomplete="off"
+      style="
+        width:100%;
+        background:rgba(255,255,255,0.06);
+        border:1px solid rgba(255,255,255,0.12);
+        border-radius:10px;
+        padding:14px 16px;
+        font-size:15px;
+        color:#fff;
+        text-align:center;
+        outline:none;
+        -webkit-appearance:none;
+        font-family:inherit;
+      "
+    >
     <button class="btn-primary" id="btn-create" onclick="createSession()">Create session</button>
   </div>
 
   <div id="screen-waiting" class="screen">
+    <div id="name-waiting" class="sub" style="min-height:1em"></div>
     <div id="code-waiting" class="session-code"></div>
     <div id="url-waiting" class="join-url"></div>
     <div id="qr-container"><div id="qr"></div></div>
@@ -75,6 +94,7 @@
   </div>
 
   <div id="screen-running" class="screen">
+    <div id="name-running" class="sub" style="min-height:1em"></div>
     <div id="code-running" class="session-code" style="font-size:32px"></div>
     <div class="live-row">
       <div class="live-dot"></div>
@@ -88,6 +108,10 @@
   <script>
     var session = null;
     var pollTimer = null;
+
+    document.getElementById('session-name-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') createSession();
+    });
 
     function api(params) {
       return fetch(SCRIPT_URL + '?' + new URLSearchParams(params).toString())
@@ -110,6 +134,7 @@
       var btn = document.getElementById('btn-create');
       btn.textContent = 'Creating…';
       btn.disabled = true;
+      var name = document.getElementById('session-name-input').value.trim();
       api({ action: 'create' }).then(function(data) {
         if (data.error) {
           alert('Error: ' + data.error);
@@ -117,13 +142,14 @@
           btn.disabled = false;
           return;
         }
-        session = { code: data.code, sheetId: data.sheetId };
+        session = { code: data.code, sheetId: data.sheetId, name: name };
         localStorage.setItem('theroom_session', JSON.stringify(session));
         showWaiting(0);
       });
     }
 
     function showWaiting(count) {
+      document.getElementById('name-waiting').textContent = session.name || '';
       document.getElementById('code-waiting').textContent = session.code;
       var joinUrl = window.location.origin + '/join/' + session.code;
       document.getElementById('url-waiting').textContent = joinUrl;
@@ -141,6 +167,7 @@
     }
 
     function showRunning(count) {
+      document.getElementById('name-running').textContent = session.name || '';
       document.getElementById('code-running').textContent = session.code;
       document.getElementById('count-running').textContent = count;
       showScreen('running');
