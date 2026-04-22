@@ -76,14 +76,15 @@ function pollStatus(sheetId) {
 
 function setStatus(sheetId, status) {
   var sheet = SpreadsheetApp.openById(sheetId).getSheets()[0];
-  // Row 2 (STATUS row, 1-indexed), col 4 (value column, 1-indexed)
   sheet.getRange(2, 4).setValue(status);
+  SpreadsheetApp.flush();
 
   var registry = SpreadsheetApp.openById(REGISTRY_ID).getSheetByName('registry');
   var values = registry.getDataRange().getValues();
   for (var i = 1; i < values.length; i++) {
-    if (values[i][1] === sheetId) {
+    if (String(values[i][1]).trim() === String(sheetId).trim()) {
       registry.getRange(i + 1, 3).setValue(status);
+      SpreadsheetApp.flush();
       break;
     }
   }
