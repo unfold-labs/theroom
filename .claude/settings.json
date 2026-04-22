@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/nicholasthorpe/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/scripts/**)",
+      "Read(//Users/nicholasthorpe/.claude/plugins/cache/claude-plugins-official/superpowers/**)",
+      "Bash(/Users/nicholasthorpe/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh --project-dir /Users/nicholasthorpe/Documents/Personal/hacks/MANGROVES_2023/the-room)",
+      "Bash(git add *)"
+    ]
+  }
+}
