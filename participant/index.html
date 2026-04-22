@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>The Room</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #111;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #field {
+      position: fixed;
+      inset: 0;
+      touch-action: none;
+    }
+    #session-bar {
+      position: absolute;
+      top: 16px;
+      left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+    #session-indicator {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+    }
+    #session-code {
+      font-size: 10px;
+      color: rgba(255,255,255,0.2);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    #label-top {
+      position: absolute;
+      top: 48px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.04em;
+      pointer-events: none;
+    }
+    #label-bottom {
+      position: absolute;
+      bottom: 48px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.25);
+      letter-spacing: 0.04em;
+      pointer-events: none;
+    }
+    #participant-name {
+      position: absolute;
+      bottom: 20px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 10px;
+      color: rgba(255,255,255,0.18);
+      pointer-events: none;
+    }
+    #fill {
+      position: absolute;
+      left: 0; right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.04);
+      pointer-events: none;
+    }
+    #dot {
+      position: absolute;
+      left: 50%;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      border: 1.5px solid rgba(255,255,255,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    #dot-inner {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #e8e3d8;
+      box-shadow: 0 0 12px rgba(232,227,216,0.5), 0 0 4px rgba(232,227,216,0.7);
+    }
+    #ended {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #111;
+      align-items: center;
+      justify-content: center;
+    }
+    #ended.visible { display: flex; }
+    #ended p { font-size: 15px; color: rgba(255,255,255,0.35); }
+  </style>
+</head>
+<body>
+  <script>
+    var SCRIPT_URL = 'REPLACE_WITH_APPS_SCRIPT_URL';
+  </script>
+
+  <div id="field">
+    <div id="session-bar">
+      <div id="session-indicator"></div>
+      <div id="session-code"></div>
+    </div>
+    <div id="label-top">With you</div>
+    <div id="fill"></div>
+    <div id="dot"><div id="dot-inner"></div></div>
+    <div id="label-bottom">Lost me</div>
+    <div id="participant-name"></div>
+  </div>
+
+  <div id="ended"><p>Session ended.</p></div>
+
+  <script>
+    var stored = sessionStorage.getItem('theroom');
+    if (!stored) { window.location.href = '/join/'; }
+
+    var session = JSON.parse(stored);
+    var value = 0.5;
+    var active = false;
+    var logTimer = null;
+    var pollTimer = null;
+
+    document.getElementById('session-code').textContent = session.code;
+    document.getElementById('participant-name').textContent = session.name;
+
+    function api(params) {
+      return fetch(SCRIPT_URL + '?' + new URLSearchParams(params).toString())
+        .then(function(r) { return r.json(); });
+    }
+
+    function updateDot(v) {
+      value = Math.max(0, Math.min(1, v));
+      document.getElementById('dot').style.top = ((1 - value) * 100) + '%';
+      document.getElementById('fill').style.height = (value * 100) + '%';
+    }
+
+    function startActive() {
+      if (active) return;
+      active = true;
+      document.getElementById('session-indicator').style.background = 'rgba(255,255,255,0.45)';
+      logTimer = setInterval(function() {
+        api({
+          action: 'log',
+          sheetId: session.sheetId,
+          participant: session.name,
+          value: value.toFixed(3)
+        });
+      }, 2000);
+    }
+
+    function endSession() {
+      active = false;
+      clearInterval(logTimer);
+      clearInterval(pollTimer);
+      document.getElementById('field').style.display = 'none';
+      document.getElementById('ended').classList.add('visible');
+    }
+
+    // Touch
+    var field = document.getElementById('field');
+    field.addEventListener('touchstart', function(e) {
+      e.preventDefault();
+      updateDot(1 - (e.touches[0].clientY / window.innerHeight));
+    }, { passive: false });
+    field.addEventListener('touchmove', function(e) {
+      e.preventDefault();
+      updateDot(1 - (e.touches[0].clientY / window.innerHeight));
+    }, { passive: false });
+
+    // Mouse (desktop testing)
+    var mouseDown = false;
+    field.addEventListener('mousedown', function(e) {
+      mouseDown = true;
+      updateDot(1 - (e.clientY / window.innerHeight));
+    });
+    field.addEventListener('mousemove', function(e) {
+      if (mouseDown) updateDot(1 - (e.clientY / window.innerHeight));
+    });
+    document.addEventListener('mouseup', function() { mouseDown = false; });
+
+    // Initialise dot at midpoint
+    updateDot(0.5);
+
+    // Poll every 2s for status transitions
+    pollTimer = setInterval(function() {
+      api({ action: 'poll', sheetId: session.sheetId }).then(function(data) {
+        if (data.status === 'ACTIVE') startActive();
+        if (data.status === 'ENDED') endSession();
+      });
+    }, 2000);
+
+    // Immediate check on load — don't wait for first poll tick
+    api({ action: 'poll', sheetId: session.sheetId }).then(function(data) {
+      if (data.status === 'ACTIVE') startActive();
+      if (data.status === 'ENDED') endSession();
+    });
+  </script>
+</body>
+</html>
