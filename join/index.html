@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Join</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 40px;
+      max-width: 320px;
+      width: 100%;
+    }
+    .screen.active { display: flex; }
+    .question {
+      font-size: 15px;
+      color: rgba(255,255,255,0.5);
+      font-weight: 500;
+      text-align: center;
+    }
+    input[type="text"] {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 20px;
+      color: #fff;
+      text-align: center;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input[type="text"]::placeholder { color: rgba(255,255,255,0.2); }
+    input[type="text"]:focus { border-color: rgba(255,255,255,0.3); }
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.9);
+      color: #111;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:active { opacity: 0.7; }
+    button:disabled { opacity: 0.4; }
+    .code-hint {
+      font-size: 11px;
+      color: rgba(255,255,255,0.18);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .error { font-size: 13px; color: #f87171; text-align: center; }
+    .holding-name { font-size: 15px; color: rgba(255,255,255,0.4); }
+    .holding-msg {
+      font-size: 13px;
+      color: rgba(255,255,255,0.2);
+      text-align: center;
+      line-height: 1.6;
+    }
+    .pulse {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      margin-top: 8px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.2; }
+      50%       { opacity: 0.6; }
+    }
+  </style>
+</head>
+<body>
+  <script>
+    var SCRIPT_URL = 'REPLACE_WITH_APPS_SCRIPT_URL';
+  </script>
+
+  <div id="screen-name" class="screen active">
+    <div class="question">What's your first name?</div>
+    <input
+      type="text"
+      id="name-input"
+      placeholder="Your name"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="words"
+      spellcheck="false"
+    >
+    <button id="btn-join" onclick="joinSession()">Join</button>
+    <div id="code-hint" class="code-hint"></div>
+    <div id="error-msg" class="error" style="display:none"></div>
+  </div>
+
+  <div id="screen-holding" class="screen">
+    <div id="holding-name" class="holding-name"></div>
+    <div class="holding-msg">Waiting for the session to start…</div>
+    <div class="pulse"></div>
+  </div>
+
+  <script>
+    // Extract code from URL path: /join/DRUM -> DRUM
+    var code = window.location.pathname.split('/').filter(Boolean).pop();
+    var sheetId = null;
+
+    if (code) document.getElementById('code-hint').textContent = code;
+    document.getElementById('name-input').focus();
+
+    document.getElementById('name-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') joinSession();
+    });
+
+    function api(params) {
+      return fetch(SCRIPT_URL + '?' + new URLSearchParams(params).toString())
+        .then(function(r) { return r.json(); });
+    }
+
+    function showError(msg) {
+      var el = document.getElementById('error-msg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function joinSession() {
+      var name = document.getElementById('name-input').value.trim();
+      if (!name) { showError('Please enter your name.'); return; }
+      if (!code) { showError('No session code in URL.'); return; }
+
+      var btn = document.getElementById('btn-join');
+      btn.disabled = true;
+      btn.textContent = 'Joining…';
+
+      api({ action: 'resolve', code: code }).then(function(data) {
+        if (data.error) {
+          showError('Session not found. Check the code and try again.');
+          btn.disabled = false;
+          btn.textContent = 'Join';
+          return;
+        }
+        sheetId = data.sheetId;
+        sessionStorage.setItem('theroom', JSON.stringify({
+          name: name,
+          sheetId: sheetId,
+          code: code
+        }));
+
+        if (data.status === 'ACTIVE') {
+          window.location.href = '/participant/';
+        } else if (data.status === 'ENDED') {
+          showError('This session has ended.');
+          btn.disabled = false;
+          btn.textContent = 'Join';
+        } else {
+          document.getElementById('holding-name').textContent = 'Hi ' + name;
+          document.getElementById('screen-name').classList.remove('active');
+          document.getElementById('screen-holding').classList.add('active');
+          pollForStart();
+        }
+      });
+    }
+
+    function pollForStart() {
+      var timer = setInterval(function() {
+        api({ action: 'poll', sheetId: sheetId }).then(function(data) {
+          if (data.status === 'ACTIVE') {
+            clearInterval(timer);
+            window.location.href = '/participant/';
+          } else if (data.status === 'ENDED') {
+            clearInterval(timer);
+            document.getElementById('screen-holding').classList.remove('active');
+            document.getElementById('screen-name').classList.add('active');
+            var btn = document.getElementById('btn-join');
+            btn.disabled = false;
+            btn.textContent = 'Join';
+            showError('Session ended before it started.');
+          }
+        });
+      }, 2000);
+    }
+  </script>
+</body>
+</html>
