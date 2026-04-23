@@ -19,6 +19,7 @@ function doGet(e) {
       case 'stop':    result = setStatus(p.sheetId, 'ENDED'); break;
       case 'poll':    result = pollStatus(p.sheetId); break;
       case 'log':     result = logPoint(p.sheetId, p.participant, parseFloat(p.value)); break;
+      case 'getData': result = getData(p.sheetId); break;
       default:        result = { error: 'unknown action' };
     }
   } catch (err) {
@@ -95,4 +96,20 @@ function logPoint(sheetId, participant, value) {
   var sheet = SpreadsheetApp.openById(sheetId).getSheets()[0];
   sheet.appendRow(['DATA', participant, new Date().toISOString(), value]);
   return { ok: true };
+}
+
+function getData(sheetId) {
+  var sheet = SpreadsheetApp.openById(sheetId).getSheets()[0];
+  var data = sheet.getDataRange().getValues();
+  var rows = [];
+  for (var i = 2; i < data.length; i++) {
+    if (data[i][0] === 'DATA') {
+      rows.push({
+        participant: data[i][1],
+        timestamp: data[i][2],
+        value: data[i][3]
+      });
+    }
+  }
+  return { rows: rows };
 }
