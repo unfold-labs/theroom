@@ -115,7 +115,10 @@
 
   <div id="screen-analysis" class="screen">
     <div id="analysis-meta" class="sub"></div>
-    <div id="analysis-chart" style="width:100%"></div>
+    <div style="display:flex;gap:12px;width:100%;align-items:flex-start">
+      <div id="analysis-sidebar" style="width:48px;flex-shrink:0"></div>
+      <div id="analysis-transcript" style="flex:1;font-size:13px;line-height:2.0;color:rgba(255,255,255,0.75)"></div>
+    </div>
     <button class="btn-secondary" onclick="newSession()">New session</button>
   </div>
 
@@ -145,111 +148,127 @@
       while (el.firstChild) el.removeChild(el.firstChild);
     }
 
-    function buildChart(rows) {
-      var W = 320, H = 180, CHART_H = 160, BUCKET_MS = 5000;
-
-      if (!rows.length) {
-        return '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block">'
-          + '<text x="160" y="90" fill="rgba(255,255,255,0.2)" font-size="11" '
-          + 'text-anchor="middle" font-family="-apple-system,sans-serif">No data</text></svg>';
-      }
-
+    function computeBuckets(rows) {
+      var BUCKET_MS = 5000;
       var times = rows.map(function(r) { return Date.parse(r.timestamp); });
       var t0 = Math.min.apply(null, times);
       var tEnd = Math.max.apply(null, times);
       var totalMs = Math.max(tEnd - t0, 1);
-
-      // Bucket values into 5s bins
-      var buckets = {};
+      var raw = {};
       rows.forEach(function(r) {
         var idx = Math.floor((Date.parse(r.timestamp) - t0) / BUCKET_MS);
-        if (!buckets[idx]) buckets[idx] = [];
-        buckets[idx].push(parseFloat(r.value));
+        if (!raw[idx]) raw[idx] = [];
+        raw[idx].push(parseFloat(r.value));
+      });
+      var buckets = {};
+      var lowestIdx = null, lowestAvg = Infinity;
+      Object.keys(raw).forEach(function(idx) {
+        var vals = raw[idx];
+        var avg = vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+        buckets[parseInt(idx, 10)] = avg;
+        if (avg < lowestAvg) { lowestAvg = avg; lowestIdx = parseInt(idx, 10); }
+      });
+      return { buckets: buckets, t0: t0, totalMs: totalMs, lowestIdx: lowestIdx, lowestAvg: lowestAvg };
+    }
+
+    function buildSidebar(rows, H) {
+      var W = 48, BUCKET_MS = 5000;
+      var computed = computeBuckets(rows);
+      var buckets = computed.buckets, t0 = computed.t0, totalMs = computed.totalMs;
+      var lowestIdx = computed.lowestIdx, lowestAvg = computed.lowestAvg;
+
+      var participants = {};
+      rows.forEach(function(r) {
+        if (!participants[r.participant]) participants[r.participant] = [];
+        participants[r.participant].push({
+          offsetMs: Date.parse(r.timestamp) - t0,
+          value: parseFloat(r.value)
+        });
       });
 
-      // Average each bucket, find lowest
-      var lowestIdx = null, lowestAvg = Infinity;
-      var points = Object.keys(buckets).map(function(idx) {
-        var vals = buckets[idx];
-        var avg = vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
-        if (avg < lowestAvg) { lowestAvg = avg; lowestIdx = parseInt(idx); }
-        var bucketMidMs = (parseInt(idx) + 0.5) * BUCKET_MS;
-        return {
-          x: Math.min((bucketMidMs / totalMs) * W, W),
-          y: (1 - avg) * CHART_H
-        };
-      }).sort(function(a, b) { return a.x - b.x; });
+      function makeVerticalPath(pts) {
+        var sorted = pts.slice().sort(function(a, b) { return a.offsetMs - b.offsetMs; });
+        var mapped = sorted.map(function(p) {
+          return {
+            x: p.value * W,
+            y: Math.min((p.offsetMs / totalMs) * H, H)
+          };
+        });
+        if (!mapped.length) return '';
+        var d = 'M' + mapped[0].x.toFixed(1) + ',' + mapped[0].y.toFixed(1);
+        for (var i = 1; i < mapped.length; i++) {
+          var cy = ((mapped[i - 1].y + mapped[i].y) / 2).toFixed(1);
+          d += ' C' + mapped[i - 1].x.toFixed(1) + ',' + cy
+            + ' ' + mapped[i].x.toFixed(1) + ',' + cy
+            + ' ' + mapped[i].x.toFixed(1) + ',' + mapped[i].y.toFixed(1);
+        }
+        return d;
+      }
 
-      // Smooth bezier path through points
-      function makePath(pts) {
+      var avgPts = Object.keys(buckets).map(function(idx) {
+        return {
+          x: buckets[parseInt(idx, 10)] * W,
+          y: Math.min(((parseInt(idx, 10) + 0.5) * BUCKET_MS / totalMs) * H, H)
+        };
+      }).sort(function(a, b) { return a.y - b.y; });
+
+      function makeAvgPath(pts) {
         if (!pts.length) return '';
         var d = 'M' + pts[0].x.toFixed(1) + ',' + pts[0].y.toFixed(1);
         for (var i = 1; i < pts.length; i++) {
-          var cx = ((pts[i - 1].x + pts[i].x) / 2).toFixed(1);
-          d += ' C' + cx + ',' + pts[i-1].y.toFixed(1)
-            + ' ' + cx + ',' + pts[i].y.toFixed(1)
+          var cy = ((pts[i - 1].y + pts[i].y) / 2).toFixed(1);
+          d += ' C' + pts[i - 1].x.toFixed(1) + ',' + cy
+            + ' ' + pts[i].x.toFixed(1) + ',' + cy
             + ' ' + pts[i].x.toFixed(1) + ',' + pts[i].y.toFixed(1);
         }
         return d;
       }
 
-      var linePath = makePath(points);
-      var first = points[0], last = points[points.length - 1];
-      var areaPath = linePath
-        + ' L' + last.x.toFixed(1) + ',' + CHART_H
-        + ' L' + first.x.toFixed(1) + ',' + CHART_H + ' Z';
+      var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg"'
+        + ' style="width:' + W + 'px;height:' + H + 'px;display:block">';
+      svg += '<rect width="' + W + '" height="' + H + '" fill="rgba(255,255,255,0.02)" rx="4"/>';
 
-      // Low point coords
-      var lowX = lowestIdx !== null
-        ? Math.min(((lowestIdx + 0.5) * BUCKET_MS / totalMs) * W, W) : null;
-      var lowY = lowestAvg !== Infinity ? (1 - lowestAvg) * CHART_H : null;
+      Object.keys(buckets).forEach(function(idx) {
+        var avg = buckets[parseInt(idx, 10)];
+        var bucketY = (parseInt(idx, 10) * BUCKET_MS / totalMs) * H;
+        var bucketH = Math.min((BUCKET_MS / totalMs) * H, H - bucketY);
+        var dist = Math.abs(avg - 0.5);
+        if (dist > 0.05) {
+          var opacity = (dist * 0.6).toFixed(2);
+          var color = avg < 0.5
+            ? 'rgba(248,113,113,' + opacity + ')'
+            : 'rgba(255,255,255,' + (dist * 0.42).toFixed(2) + ')';
+          svg += '<rect x="2" y="' + bucketY.toFixed(1) + '" width="' + (W - 4) + '"'
+            + ' height="' + Math.max(bucketH, 1).toFixed(1) + '" rx="2" fill="' + color + '"/>';
+        }
+      });
 
-      // Time label formatter
-      function fmtMs(ms) {
-        var s = Math.round(ms / 1000), m = Math.floor(s / 60);
-        return m + ':' + ((s % 60) < 10 ? '0' : '') + (s % 60);
+      Object.keys(participants).forEach(function(name) {
+        var d = makeVerticalPath(participants[name]);
+        if (d) svg += '<path d="' + d + '" fill="none" stroke="rgba(255,255,255,0.13)" stroke-width="1"/>';
+      });
+
+      var avgPath = makeAvgPath(avgPts);
+      if (avgPath) {
+        svg += '<path d="' + avgPath + '" fill="none" stroke="rgba(255,255,255,0.80)" stroke-width="2"/>';
       }
 
-      var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block">';
-      svg += '<defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">'
-        + '<stop offset="0%" stop-color="rgba(255,255,255,0.10)"/>'
-        + '<stop offset="100%" stop-color="rgba(255,255,255,0)"/>'
-        + '</linearGradient></defs>';
-      svg += '<rect width="' + W + '" height="' + CHART_H + '" fill="rgba(255,255,255,0.02)" rx="6"/>';
-      svg += '<line x1="0" y1="' + (CHART_H/2) + '" x2="' + W + '" y2="' + (CHART_H/2)
-        + '" stroke="rgba(255,255,255,0.05)" stroke-width="1" stroke-dasharray="4 4"/>';
-      svg += '<path d="' + areaPath + '" fill="url(#ag)"/>';
-      svg += '<path d="' + linePath + '" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="1.5" stroke-linecap="round"/>';
-
-      if (lowX !== null) {
-        svg += '<line x1="' + lowX.toFixed(1) + '" y1="0" x2="' + lowX.toFixed(1) + '" y2="' + CHART_H
-          + '" stroke="rgba(248,113,113,0.15)" stroke-width="1" stroke-dasharray="3 3"/>';
-        svg += '<circle cx="' + lowX.toFixed(1) + '" cy="' + lowY.toFixed(1) + '" r="3" fill="#f87171" opacity="0.8"/>';
+      if (lowestIdx !== null) {
+        var lowY = Math.min(((lowestIdx + 0.5) * BUCKET_MS / totalMs) * H, H);
+        var lowX = lowestAvg * W;
+        svg += '<line x1="0" y1="' + lowY.toFixed(1) + '" x2="' + W + '" y2="' + lowY.toFixed(1)
+          + '" stroke="rgba(248,113,113,0.20)" stroke-width="1" stroke-dasharray="3 3"/>';
+        svg += '<circle cx="' + lowX.toFixed(1) + '" cy="' + lowY.toFixed(1) + '" r="3" fill="#f87171" opacity="0.9"/>';
       }
 
-      svg += '<line x1="0" y1="' + (H-2) + '" x2="' + W + '" y2="' + (H-2)
-        + '" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>';
-      svg += '<text x="2" y="' + (H-5) + '" fill="rgba(255,255,255,0.2)" font-size="8" font-family="-apple-system,sans-serif">0:00</text>';
-      svg += '<text x="' + (W/2) + '" y="' + (H-5) + '" fill="rgba(255,255,255,0.2)" font-size="8" '
-        + 'font-family="-apple-system,sans-serif" text-anchor="middle">' + fmtMs(totalMs / 2) + '</text>';
-      svg += '<text x="' + (W-2) + '" y="' + (H-5) + '" fill="rgba(255,255,255,0.2)" font-size="8" '
-        + 'font-family="-apple-system,sans-serif" text-anchor="end">' + fmtMs(totalMs) + '</text>';
-      svg += '<text x="4" y="12" fill="rgba(255,255,255,0.2)" font-size="9" font-family="-apple-system,sans-serif">With you</text>';
-      svg += '<text x="4" y="' + (CHART_H - 4) + '" fill="rgba(255,255,255,0.2)" font-size="9" font-family="-apple-system,sans-serif">Lost me</text>';
       svg += '</svg>';
       return svg;
     }
 
-    function renderChart(rows) {
-      var svgStr = buildChart(rows);
-      var parser = new DOMParser();
-      var doc = parser.parseFromString(svgStr, 'image/svg+xml');
-      var chartEl = document.getElementById('analysis-chart');
-      while (chartEl.firstChild) chartEl.removeChild(chartEl.firstChild);
-      chartEl.appendChild(document.importNode(doc.documentElement, true));
-    }
+    function showAnalysis(data) {
+      var rows = data.rows || [];
+      var phrases = data.phrases || [];
 
-    function showAnalysis(rows) {
       var participants = {};
       rows.forEach(function(r) { participants[r.participant] = true; });
       var count = Object.keys(participants).length;
@@ -267,10 +286,48 @@
       parts.push(session.code);
       parts.push(dateStr);
       parts.push(count + ' participant' + (count !== 1 ? 's' : '') + durationStr);
-
       document.getElementById('analysis-meta').textContent = parts.join(' · ');
-      renderChart(rows);
+
+      var computed = rows.length ? computeBuckets(rows) : null;
+
+      var transcriptEl = document.getElementById('analysis-transcript');
+      while (transcriptEl.firstChild) transcriptEl.removeChild(transcriptEl.firstChild);
+
+      if (!phrases.length) {
+        var msg = document.createElement('span');
+        msg.textContent = 'No transcript — transcription requires Chrome with microphone access.';
+        msg.style.color = 'rgba(255,255,255,0.2)';
+        msg.style.fontSize = '12px';
+        transcriptEl.appendChild(msg);
+      } else {
+        phrases.forEach(function(phrase) {
+          var span = document.createElement('span');
+          span.textContent = phrase.text + ' ';
+          if (computed) {
+            var bucketIdx = Math.floor(phrase.offsetMs / 5000);
+            var avg = computed.buckets[bucketIdx] !== undefined ? computed.buckets[bucketIdx] : 0.5;
+            if (avg < 0.35) {
+              var opacity = ((0.35 - avg) / 0.35 * 0.30).toFixed(2);
+              span.style.background = 'rgba(248,113,113,' + opacity + ')';
+            } else if (avg < 0.6) {
+              span.style.background = 'rgba(255,255,255,0.05)';
+            }
+          }
+          transcriptEl.appendChild(span);
+        });
+      }
+
       showScreen('analysis');
+
+      var sidebarEl = document.getElementById('analysis-sidebar');
+      while (sidebarEl.firstChild) sidebarEl.removeChild(sidebarEl.firstChild);
+      if (rows.length) {
+        var H = transcriptEl.offsetHeight || 200;
+        var svgStr = buildSidebar(rows, H);
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(svgStr, 'image/svg+xml');
+        sidebarEl.appendChild(document.importNode(doc.documentElement, true));
+      }
     }
 
     function newSession() {
@@ -403,7 +460,7 @@
           return api({ action: 'getData', sheetId: session.sheetId });
         })
         .then(function(data) {
-          showAnalysis(data.rows || []);
+          showAnalysis(data);
           localStorage.removeItem('theroom_session');
           session = null;
         })
