@@ -323,11 +323,13 @@
       var sidebarEl = document.getElementById('analysis-sidebar');
       while (sidebarEl.firstChild) sidebarEl.removeChild(sidebarEl.firstChild);
       if (rows.length) {
-        var H = transcriptEl.offsetHeight || 200;
-        var svgStr = buildSidebar(rows, H, computed);
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(svgStr, 'image/svg+xml');
-        sidebarEl.appendChild(document.importNode(doc.documentElement, true));
+        setTimeout(function() {
+          var H = transcriptEl.offsetHeight || 200;
+          var svgStr = buildSidebar(rows, H, computed);
+          var parser = new DOMParser();
+          var doc = parser.parseFromString(svgStr, 'image/svg+xml');
+          sidebarEl.appendChild(document.importNode(doc.documentElement, true));
+        }, 0);
       }
     }
 
