@@ -13,14 +13,15 @@ function doGet(e) {
   var result;
   try {
     switch (p.action) {
-      case 'create':  result = createSession(); break;
-      case 'resolve': result = resolveCode(p.code); break;
-      case 'start':   result = setStatus(p.sheetId, 'ACTIVE'); break;
-      case 'stop':    result = setStatus(p.sheetId, 'ENDED'); break;
-      case 'poll':    result = pollStatus(p.sheetId); break;
-      case 'log':     result = logPoint(p.sheetId, p.participant, parseFloat(p.value)); break;
-      case 'getData': result = getData(p.sheetId); break;
-      default:        result = { error: 'unknown action' };
+      case 'create':     result = createSession(); break;
+      case 'resolve':    result = resolveCode(p.code); break;
+      case 'start':      result = setStatus(p.sheetId, 'ACTIVE'); break;
+      case 'stop':       result = setStatus(p.sheetId, 'ENDED'); break;
+      case 'poll':       result = pollStatus(p.sheetId); break;
+      case 'log':        result = logPoint(p.sheetId, p.participant, parseFloat(p.value)); break;
+      case 'getData':    result = getData(p.sheetId); break;
+      case 'logPhrase':  result = logPhrase(p.sheetId, p.phrase, parseInt(p.offsetMs)); break;
+      default:           result = { error: 'unknown action' };
     }
   } catch (err) {
     result = { error: err.message };
@@ -102,6 +103,7 @@ function getData(sheetId) {
   var sheet = SpreadsheetApp.openById(sheetId).getSheets()[0];
   var data = sheet.getDataRange().getValues();
   var rows = [];
+  var phrases = [];
   for (var i = 2; i < data.length; i++) {
     if (data[i][0] === 'DATA') {
       rows.push({
@@ -109,7 +111,18 @@ function getData(sheetId) {
         timestamp: data[i][2],
         value: data[i][3]
       });
+    } else if (data[i][0] === 'TRANSCRIPT') {
+      phrases.push({
+        text: data[i][1],
+        offsetMs: parseInt(data[i][2])
+      });
     }
   }
-  return { rows: rows };
+  return { rows: rows, phrases: phrases };
+}
+
+function logPhrase(sheetId, phrase, offsetMs) {
+  var sheet = SpreadsheetApp.openById(sheetId).getSheets()[0];
+  sheet.appendRow(['TRANSCRIPT', phrase, offsetMs]);
+  return { ok: true };
 }
