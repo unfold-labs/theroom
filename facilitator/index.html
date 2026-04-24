@@ -171,9 +171,8 @@
       return { buckets: buckets, t0: t0, totalMs: totalMs, lowestIdx: lowestIdx, lowestAvg: lowestAvg };
     }
 
-    function buildSidebar(rows, H) {
+    function buildSidebar(rows, H, computed) {
       var W = 48, BUCKET_MS = 5000;
-      var computed = computeBuckets(rows);
       var buckets = computed.buckets, t0 = computed.t0, totalMs = computed.totalMs;
       var lowestIdx = computed.lowestIdx, lowestAvg = computed.lowestAvg;
 
@@ -304,6 +303,8 @@
           var span = document.createElement('span');
           span.textContent = phrase.text + ' ';
           if (computed) {
+            // phrase.offsetMs is relative to session.startedAt; dot buckets are relative to first
+            // dot timestamp (computed.t0). The ~2s offset between them is negligible for colouring.
             var bucketIdx = Math.floor(phrase.offsetMs / 5000);
             var avg = computed.buckets[bucketIdx] !== undefined ? computed.buckets[bucketIdx] : 0.5;
             if (avg < 0.35) {
@@ -323,7 +324,7 @@
       while (sidebarEl.firstChild) sidebarEl.removeChild(sidebarEl.firstChild);
       if (rows.length) {
         var H = transcriptEl.offsetHeight || 200;
-        var svgStr = buildSidebar(rows, H);
+        var svgStr = buildSidebar(rows, H, computed);
         var parser = new DOMParser();
         var doc = parser.parseFromString(svgStr, 'image/svg+xml');
         sidebarEl.appendChild(document.importNode(doc.documentElement, true));
