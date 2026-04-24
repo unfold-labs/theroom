@@ -20,7 +20,7 @@ function doGet(e) {
       case 'poll':       result = pollStatus(p.sheetId); break;
       case 'log':        result = logPoint(p.sheetId, p.participant, parseFloat(p.value)); break;
       case 'getData':    result = getData(p.sheetId); break;
-      case 'logPhrase':  result = logPhrase(p.sheetId, p.phrase, parseInt(p.offsetMs)); break;
+      case 'logPhrase':  result = logPhrase(p.sheetId, p.phrase, parseInt(p.offsetMs, 10)); break;
       default:           result = { error: 'unknown action' };
     }
   } catch (err) {
@@ -114,7 +114,7 @@ function getData(sheetId) {
     } else if (data[i][0] === 'TRANSCRIPT') {
       phrases.push({
         text: data[i][1],
-        offsetMs: parseInt(data[i][2])
+        offsetMs: parseInt(data[i][2], 10)
       });
     }
   }
