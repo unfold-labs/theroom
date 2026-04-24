@@ -309,6 +309,8 @@
       recognition.onerror = function(event) {
         if (event.error === 'not-allowed') {
           document.getElementById('transcription-warning').style.display = 'block';
+          recognition.onend = null;
+          recognition = null;
         }
       };
       recognition.start();
@@ -420,7 +422,7 @@
           localStorage.removeItem('theroom_session');
           return;
         }
-        if (data.status === 'ACTIVE') showRunning(data.count || 0);
+        if (data.status === 'ACTIVE') { showRunning(data.count || 0); startTranscription(); }
         else showWaiting(data.count || 0);
       });
     }
