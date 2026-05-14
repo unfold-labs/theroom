@@ -59,6 +59,17 @@
     }
     .divider { width: 100%; height: 1px; background: rgba(255,255,255,0.06); }
     #screen-analysis { max-width: min(960px, 96vw); align-items: flex-start; }
+    #track-tooltip {
+      position: fixed;
+      background: rgba(30,30,30,0.95);
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 5px;
+      pointer-events: none;
+      display: none;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -113,6 +124,8 @@
     <div class="divider"></div>
     <button class="btn-danger" onclick="stopSession()">Stop session</button>
   </div>
+
+  <div id="track-tooltip"></div>
 
   <div id="screen-analysis" class="screen">
     <div id="analysis-meta" class="sub"></div>
@@ -171,6 +184,11 @@
       });
       return { buckets: buckets, t0: t0, totalMs: totalMs, lowestIdx: lowestIdx, lowestAvg: lowestAvg };
     }
+
+    var TRACK_COLORS = [
+      '#93c5fd', '#86efac', '#fdba74', '#d8b4fe',
+      '#fca5a5', '#fde68a', '#67e8f9', '#f9a8d4'
+    ];
 
     function buildSidebar(rows, H, computed) {
       var W = 80, BUCKET_MS = 5000;
@@ -247,15 +265,18 @@
         }
       });
 
-      Object.keys(participants).forEach(function(name) {
+      Object.keys(participants).forEach(function(name, i) {
         var pts = participants[name];
+        var color = TRACK_COLORS[i % TRACK_COLORS.length];
         var d = makeVerticalPath(pts);
         if (d) {
-          svg += '<path d="' + d + '" fill="none" stroke="rgba(255,255,255,0.13)" stroke-width="1"/>';
+          svg += '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.5"'
+            + ' opacity="0.45" data-participant="' + escapeSvg(name) + '"/>';
           var firstPt = pts.slice().sort(function(a, b) { return a.offsetMs - b.offsetMs; })[0];
           var labelY = Math.max(Math.min((firstPt.offsetMs / totalMs) * H, H - 2), 8);
-          svg += '<text x="2" y="' + labelY.toFixed(1) + '" fill="rgba(255,255,255,0.30)"'
-            + ' font-size="8" font-family="-apple-system,sans-serif">' + escapeSvg(name) + '</text>';
+          svg += '<text x="2" y="' + labelY.toFixed(1) + '" fill="' + color + '"'
+            + ' font-size="8" opacity="0.6" font-family="-apple-system,sans-serif">'
+            + escapeSvg(name) + '</text>';
         }
       });
 
@@ -348,6 +369,27 @@
           var parser = new DOMParser();
           var doc = parser.parseFromString(svgStr, 'image/svg+xml');
           sidebarEl.appendChild(document.importNode(doc.documentElement, true));
+
+          var tooltip = document.getElementById('track-tooltip');
+          sidebarEl.querySelectorAll('path[data-participant]').forEach(function(path) {
+            var name = path.getAttribute('data-participant');
+            path.style.cursor = 'pointer';
+            path.addEventListener('mouseover', function(e) {
+              path.style.opacity = '1';
+              path.style.strokeWidth = '3';
+              tooltip.textContent = name;
+              tooltip.style.display = 'block';
+            });
+            path.addEventListener('mousemove', function(e) {
+              tooltip.style.left = (e.clientX + 12) + 'px';
+              tooltip.style.top = (e.clientY - 8) + 'px';
+            });
+            path.addEventListener('mouseout', function() {
+              path.style.opacity = '0.45';
+              path.style.strokeWidth = '1.5';
+              tooltip.style.display = 'none';
+            });
+          });
         }, 0);
       }
     }
