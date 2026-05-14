@@ -315,6 +315,11 @@
             }
           }
           transcriptEl.appendChild(span);
+          var last = phrase.text.trim().slice(-1);
+          if (last === '.' || last === '?' || last === '!') {
+            transcriptEl.appendChild(document.createElement('br'));
+            transcriptEl.appendChild(document.createElement('br'));
+          }
         });
       }
 
