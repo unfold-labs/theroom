@@ -130,7 +130,7 @@
   <div id="screen-analysis" class="screen">
     <div id="analysis-meta" class="sub"></div>
     <div style="display:flex;gap:12px;width:100%;align-items:flex-start">
-      <div id="analysis-sidebar" style="width:80px;flex-shrink:0"></div>
+      <div id="analysis-sidebar" style="width:200px;flex-shrink:0"></div>
       <div id="analysis-transcript" style="flex:1;font-size:15px;line-height:2.0;color:rgba(255,255,255,0.75)"></div>
     </div>
     <button class="btn-secondary" onclick="newSession()">New session</button>
@@ -191,7 +191,7 @@
     ];
 
     function buildSidebar(rows, H, computed) {
-      var W = 80, BUCKET_MS = 5000;
+      var W = 200, BUCKET_MS = 5000;
 
       function escapeSvg(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -249,6 +249,11 @@
       var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg"'
         + ' style="width:' + W + 'px;height:' + H + 'px;display:block">';
       svg += '<rect width="' + W + '" height="' + H + '" fill="rgba(255,255,255,0.02)" rx="4"/>';
+      svg += '<text x="3" y="10" fill="rgba(248,113,113,0.35)" font-size="8" font-family="-apple-system,sans-serif">lost</text>';
+      svg += '<text x="' + (W - 3) + '" y="10" fill="rgba(255,255,255,0.25)" font-size="8"'
+        + ' font-family="-apple-system,sans-serif" text-anchor="end">with you</text>';
+      svg += '<line x1="' + (W / 2) + '" y1="0" x2="' + (W / 2) + '" y2="' + H
+        + '" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>';
 
       Object.keys(buckets).forEach(function(idx) {
         var avg = buckets[parseInt(idx, 10)];
