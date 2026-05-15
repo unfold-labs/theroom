@@ -339,13 +339,14 @@
       } else {
         var prevOffsetMs = 0;
         phrases.forEach(function(phrase) {
-          if (prevOffsetMs > 0 && phrase.offsetMs - prevOffsetMs > 3000) {
+          if (prevOffsetMs > 0 && phrase.offsetMs - prevOffsetMs > 4000) {
+            transcriptEl.appendChild(document.createElement('br'));
             transcriptEl.appendChild(document.createElement('br'));
           }
           prevOffsetMs = phrase.offsetMs;
 
           var span = document.createElement('span');
-          span.textContent = phrase.text;
+          span.textContent = phrase.text + ' ';
           if (computed) {
             // phrase.offsetMs is relative to session.startedAt; dot buckets are relative to first
             // dot timestamp (computed.t0). The ~2s offset between them is negligible for colouring.
@@ -359,7 +360,6 @@
             }
           }
           transcriptEl.appendChild(span);
-          transcriptEl.appendChild(document.createElement('br'));
         });
       }
 
